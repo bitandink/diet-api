@@ -16,13 +16,18 @@ Spring Boot 기반 식단 관리 REST API
 
 ## Architecture
 
+```
 Controller
-↓
+    │
+    ▼
 Service
-↓
+    │
+    ▼
 Repository
-↓
+    │
+    ▼
 Database
+```
 
 ## API
 

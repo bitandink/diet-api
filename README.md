@@ -42,7 +42,7 @@ DELETE /api/meals/{id}
 - [x] Meal Entity
 - [x] Meal Repository
 - [x] Meal Service
-- [ ] H2 Database
+- [x] H2 Database
 - [ ] CRUD API
 - [ ] MySQL
 - [ ] JWT

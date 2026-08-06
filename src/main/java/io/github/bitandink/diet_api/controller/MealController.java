@@ -3,6 +3,7 @@ package io.github.bitandink.diet_api.controller;
 import io.github.bitandink.diet_api.dto.MealRequest;
 import io.github.bitandink.diet_api.entity.Meal;
 import io.github.bitandink.diet_api.service.MealService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +25,7 @@ public class MealController {
     }
 
     @PostMapping
-    public Meal saveMeal(@RequestBody MealRequest mealRequest) {
+    public Meal saveMeal(@Valid @RequestBody MealRequest mealRequest) {
         return mealService.saveMeal(mealRequest);
     }
 
@@ -34,7 +35,7 @@ public class MealController {
     }
 
     @PutMapping("/{id}")
-    public Meal updateMeal(@PathVariable Long id, @RequestBody MealRequest mealRequest) {
+    public Meal updateMeal(@Valid @PathVariable Long id, @RequestBody MealRequest mealRequest) {
         return mealService.updateMeal(id, mealRequest);
     }
 

@@ -1,7 +1,7 @@
 package io.github.bitandink.diet_api.controller;
 
 import io.github.bitandink.diet_api.dto.MealRequest;
-import io.github.bitandink.diet_api.entity.Meal;
+import io.github.bitandink.diet_api.dto.MealResponse;
 import io.github.bitandink.diet_api.service.MealService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -20,22 +20,22 @@ public class MealController {
     }
 
     @GetMapping
-    public List<Meal> findAll() {
+    public List<MealResponse> findAll() {
         return mealService.findAll();
     }
 
     @PostMapping
-    public Meal saveMeal(@Valid @RequestBody MealRequest mealRequest) {
+    public MealResponse saveMeal(@Valid @RequestBody MealRequest mealRequest) {
         return mealService.saveMeal(mealRequest);
     }
 
     @GetMapping("/{id}")
-    public Meal findById(@PathVariable Long id) {
+    public MealResponse findById(@PathVariable Long id) {
         return mealService.findById(id);
     }
 
     @PutMapping("/{id}")
-    public Meal updateMeal(@Valid @PathVariable Long id, @RequestBody MealRequest mealRequest) {
+    public MealResponse updateMeal(@Valid @PathVariable Long id, @RequestBody MealRequest mealRequest) {
         return mealService.updateMeal(id, mealRequest);
     }
 

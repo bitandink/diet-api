@@ -1,6 +1,5 @@
 package io.github.bitandink.diet_api.exception;
 
-import io.github.bitandink.diet_api.entity.Meal;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

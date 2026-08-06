@@ -1,11 +1,18 @@
 package io.github.bitandink.diet_api.entity;
 
+import io.github.bitandink.diet_api.dto.MealRequest;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 
 @Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Meal {
 
     @Id
@@ -13,14 +20,14 @@ public class Meal {
     private Long id;
 
     private String mealName;
-    private Integer calories;
-    private Integer protein;
-    private Integer carbohydrate;
-    private Integer fat;
 
-    protected Meal() {
-        // JPA가 Entity 객체를 생성할 때 사용하는 기본 생성자
-    }
+    private Integer calories;
+
+    private Integer protein;
+
+    private Integer carbohydrate;
+
+    private Integer fat;
 
     public Meal(
             String mealName,
@@ -36,51 +43,11 @@ public class Meal {
         this.fat = fat;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getMealName() {
-        return mealName;
-    }
-
-    public Integer getCalories() {
-        return calories;
-    }
-
-    public Integer getProtein() {
-        return protein;
-    }
-
-    public Integer getCarbohydrate() {
-        return carbohydrate;
-    }
-
-    public Integer getFat() {
-        return fat;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public void setMealName(String mealName) {
-        this.mealName = mealName;
-    }
-
-    public void setCalories(Integer calories) {
-        this.calories = calories;
-    }
-
-    public void setProtein(Integer protein) {
-        this.protein = protein;
-    }
-
-    public void setCarbohydrate(Integer carbohydrate) {
-        this.carbohydrate = carbohydrate;
-    }
-
-    public void setFat(Integer fat) {
-        this.fat = fat;
+    public void update(MealRequest mealRequest) {
+        this.mealName = mealRequest.getMealName();
+        this.calories = mealRequest.getCalories();
+        this.protein = mealRequest.getProtein();
+        this.carbohydrate = mealRequest.getCarbohydrate();
+        this.fat = mealRequest.getFat();
     }
 }

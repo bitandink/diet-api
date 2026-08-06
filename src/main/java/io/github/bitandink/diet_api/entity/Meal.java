@@ -59,4 +59,28 @@ public class Meal {
     public Integer getFat() {
         return fat;
     }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setMealName(String mealName) {
+        this.mealName = mealName;
+    }
+
+    public void setCalories(Integer calories) {
+        this.calories = calories;
+    }
+
+    public void setProtein(Integer protein) {
+        this.protein = protein;
+    }
+
+    public void setCarbohydrate(Integer carbohydrate) {
+        this.carbohydrate = carbohydrate;
+    }
+
+    public void setFat(Integer fat) {
+        this.fat = fat;
+    }
 }

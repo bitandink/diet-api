@@ -1,0 +1,17 @@
+### 식단 등록
+POST http://localhost:8080/api/meals
+Content-Type: application/json
+
+{
+  "mealName": "닭가슴살",
+  "calories": 120,
+  "protein": 25,
+  "carbohydrate": 2,
+  "fat": 1
+}
+
+### 전체 식단 조회
+GET http://localhost:8080/api/meals
+
+### 특정 식단 조회
+GET http://localhost:8080/api/meals/1

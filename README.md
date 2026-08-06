@@ -48,7 +48,7 @@ DELETE /api/meals/{id}
 - [x] Meal Repository
 - [x] Meal Service
 - [x] H2 Database
-- [ ] CRUD API
+- [x] CRUD API
 - [ ] MySQL
 - [ ] JWT
 - [ ] AWS EC2 배포

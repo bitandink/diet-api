@@ -1408,3 +1408,323 @@ PUT /api/meals/{id}
 ```
 
 백엔드 개발은 각 코드를 따로 작성하는 작업이 아니라, 데이터가 계층별 역할에 맞게 안전하게 이동하도록 흐름을 설계하는 작업이다.
+
+---
+
+# Day 03 - Troubleshooting
+
+---
+
+# 1. Generic(<T>) 선언 누락
+
+## 문제
+
+`ApiResponse`를 구현하는 과정에서 다음과 같이 작성했다.
+
+```java
+private T data;
+```
+
+하지만 컴파일 시 다음과 같은 오류가 발생했다.
+
+```
+T cannot be resolved to a type
+```
+
+---
+
+## 원인
+
+필드에서는 `T`를 사용했지만,
+클래스 자체에 Generic을 선언하지 않았다.
+
+```java
+public class ApiResponse
+```
+
+이 상태에서는 Java가 `T`가 어떤 타입인지 알 수 없다.
+
+---
+
+## 해결
+
+클래스 선언에 Generic을 추가했다.
+
+```java
+public class ApiResponse<T>
+```
+
+---
+
+## 배운 점
+
+Generic은 필드에서 사용하는 것이 아니라,
+
+> **클래스가 어떤 타입을 사용할 것인지 먼저 선언해야 한다.**
+
+---
+
+# 2. ErrorResponse 객체 생성 문법 오류
+
+## 문제
+
+처음에는 다음과 같이 객체를 생성하려고 했다.
+
+```java
+new ErrorResponse() {
+    ...
+}
+```
+
+---
+
+## 원인
+
+객체를 생성하려던 의도였지만
+
+```java
+{}
+```
+
+를 사용하면 Java에서는 **익명 클래스(Anonymous Class)** 를 생성하는 문법으로 인식한다.
+
+---
+
+## 해결
+
+생성자에 필요한 값을 괄호 안으로 전달하도록 수정했다.
+
+```java
+new ErrorResponse(
+    status,
+    message,
+    path
+)
+```
+
+---
+
+## 배운 점
+
+객체 생성과 익명 클래스 생성은 전혀 다른 문법이다.
+
+---
+
+# 3. RuntimeException에서 Status와 Path를 가져오려고 했던 문제
+
+## 문제
+
+처음에는 다음과 같이 생각했다.
+
+```java
+runtimeException.getStatus();
+runtimeException.getPath();
+```
+
+---
+
+## 원인
+
+`RuntimeException`은
+
+- message
+
+만 가지고 있으며
+
+HTTP Status와 Request Path는 Exception 객체의 책임이 아니다.
+
+---
+
+## 해결
+
+역할을 다음과 같이 분리했다.
+
+```text
+Exception
+→ 어떤 문제가 발생했는지 표현
+
+GlobalExceptionHandler
+→ HTTP Status 결정
+
+HttpServletRequest
+→ Request URI 제공
+
+ErrorResponse
+→ 위 정보를 JSON 형태로 번역
+```
+
+---
+
+## 배운 점
+
+객체마다 책임이 다르기 때문에
+
+필요한 정보도 각 객체가 나누어 가지고 있다.
+
+---
+
+# 4. ApiResponse의 data를 List로 설계했던 문제
+
+## 문제
+
+처음에는 다음처럼 작성했다.
+
+```java
+private List data;
+```
+
+---
+
+## 원인
+
+조회 API만 생각하고 설계했기 때문에
+
+- 단건 조회
+- 등록
+- 수정
+- 삭제
+
+등 다양한 응답 형태를 고려하지 못했다.
+
+---
+
+## 해결
+
+Generic을 사용하도록 변경했다.
+
+```java
+private T data;
+```
+
+---
+
+## 배운 점
+
+공통 클래스를 설계할 때는
+
+현재 기능이 아니라
+
+> **앞으로 어떤 형태의 데이터도 담을 수 있는 구조인지**
+
+를 먼저 생각해야 한다.
+
+---
+
+# 5. Validation Exception도 404를 반환했던 문제
+
+## 문제
+
+Validation 실패 시에도
+
+```java
+HttpStatus.NOT_FOUND
+```
+
+를 반환하도록 작성했다.
+
+---
+
+## 원인
+
+404는
+
+> 리소스를 찾을 수 없는 경우
+
+이고
+
+Validation 실패는
+
+> 클라이언트 요청 자체가 잘못된 경우
+
+이다.
+
+---
+
+## 해결
+
+Validation 실패는
+
+```java
+HttpStatus.BAD_REQUEST
+```
+
+를 반환하도록 수정했다.
+
+---
+
+## 배운 점
+
+HTTP Status는 단순한 숫자가 아니라
+
+상황을 표현하는 규칙이다.
+
+---
+
+# 6. 코드가 복잡해 보였던 이유
+
+## 문제
+
+처음에는 다음과 같은 반환 타입이 매우 복잡하게 느껴졌다.
+
+```java
+ResponseEntity<ApiResponse<List<MealResponse>>>
+```
+
+---
+
+## 원인
+
+문법만 보고 있었기 때문에
+
+각 객체의 역할을 이해하지 못했다.
+
+---
+
+## 해결
+
+각 클래스의 책임을 먼저 이해한 뒤 다시 코드를 읽었다.
+
+```text
+ResponseEntity
+→ HTTP 응답 전체
+
+ApiResponse
+→ 공통 응답 형식
+
+List<MealResponse>
+→ 실제 데이터
+```
+
+---
+
+## 배운 점
+
+문법을 먼저 외우는 것보다
+
+> **역할과 책임을 먼저 이해하면 코드가 패턴으로 보이기 시작한다.**
+
+---
+
+# 오늘의 회고
+
+오늘 가장 크게 느낀 점은
+
+Spring은 파일을 많이 만드는 프레임워크가 아니라,
+
+> **각 클래스가 하나의 책임만 가지도록 설계하는 프레임워크**
+
+라는 것이다.
+
+파일 수는 늘어났지만
+
+각 파일의 역할은 훨씬 명확해졌고,
+
+문제가 발생했을 때 어디를 수정해야 하는지 빠르게 찾을 수 있게 되었다.
+
+또한 처음에는 복잡하게 보이던 코드도
+
+역할을 이해한 후에는 하나의 패턴으로 읽히기 시작했다.
+
+이 경험을 통해
+
+> **객체지향은 문법이 아니라 역할을 나누는 설계 방식이라는 점을 체감할 수 있었다.**

@@ -43,11 +43,17 @@ public class Meal {
         this.fat = fat;
     }
 
-    public void update(MealRequest mealRequest) {
-        this.mealName = mealRequest.getMealName();
-        this.calories = mealRequest.getCalories();
-        this.protein = mealRequest.getProtein();
-        this.carbohydrate = mealRequest.getCarbohydrate();
-        this.fat = mealRequest.getFat();
+    public void update(
+            String mealName,
+            Integer calories,
+            Integer protein,
+            Integer carbohydrate,
+            Integer fat
+    ) {
+        this.mealName = mealName;
+        this.calories = calories;
+        this.protein = protein;
+        this.carbohydrate = carbohydrate;
+        this.fat = fat;
     }
 }

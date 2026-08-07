@@ -6,6 +6,7 @@ import io.github.bitandink.diet_api.entity.Meal;
 import io.github.bitandink.diet_api.exception.MealNotFoundException;
 import io.github.bitandink.diet_api.repository.MealRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -50,13 +51,20 @@ public class MealService {
     }
 
     // 기존 식단 수정
-    public MealResponse updateMeal(Long id, MealRequest mealRequest) {
+    @Transactional
+    public MealResponse updateMeal(Long id, MealRequest request) {
         Meal meal = mealRepository.findById(id)
                 .orElseThrow(() -> new MealNotFoundException(id));
 
-        Meal updatedMeal = mealRepository.save(meal);
+        meal.update(
+                request.getMealName(),
+                request.getCalories(),
+                request.getProtein(),
+                request.getCarbohydrate(),
+                request.getFat()
+        );
 
-        return MealResponse.from(updatedMeal);
+        return MealResponse.from(meal);
     }
 
     // 식단 삭제

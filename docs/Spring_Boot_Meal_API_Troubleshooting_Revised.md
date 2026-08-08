@@ -1728,3 +1728,350 @@ Spring은 파일을 많이 만드는 프레임워크가 아니라,
 이 경험을 통해
 
 > **객체지향은 문법이 아니라 역할을 나누는 설계 방식이라는 점을 체감할 수 있었다.**
+
+---
+
+# PUT 요청 시 식단 데이터가 수정되지 않는 문제
+
+## 문제 상황
+
+Meal 수정 API를 구현한 뒤 `PUT /api/meals/{id}` 요청을 보냈지만, 요청 자체는 정상적으로 처리되는 반면 실제 식단 데이터가 변경되지 않는 문제가 발생했다.
+
+예를 들어 다음과 같이 수정 요청을 보냈다.
+
+```http
+PUT /api/meals/1
+Content-Type: application/json
+
+{
+  "mealName": "연어 샐러드",
+  "calories": 450,
+  "protein": 35,
+  "carbohydrate": 20,
+  "fat": 25
+}
+```
+
+기대한 결과는 기존 Meal 데이터가 요청 값으로 변경되는 것이었지만, 실제 DB 데이터와 API 응답에는 기존 값이 그대로 남아 있었다.
+
+---
+
+## Git 이력을 통한 원인 추적
+
+### 1. 최초 CRUD 구현
+
+커밋 `5e13523` (`feat: complete meal CRUD API`)에서는 PUT 수정 로직이 정상적으로 구현되어 있었다.
+
+```java
+public Meal updateMeal(Long id, MealRequest mealRequest) {
+    Meal meal = mealRepository.findById(id)
+            .orElseThrow(() -> new MealNotFoundException(id));
+
+    meal.setMealName(mealRequest.getMealName());
+    meal.setCalories(mealRequest.getCalories());
+    meal.setProtein(mealRequest.getProtein());
+    meal.setCarbohydrate(mealRequest.getCarbohydrate());
+    meal.setFat(mealRequest.getFat());
+
+    return mealRepository.save(meal);
+}
+```
+
+Repository에서 Meal을 조회한 뒤 setter를 통해 Entity 상태를 변경하고 `save()`를 호출하는 구조였다.
+
+따라서 PUT 요청으로 전달된 데이터가 Entity에 정상적으로 반영되었다.
+
+---
+
+### 2. Lombok / Response DTO 리팩터링
+
+커밋 `703bd7b` (`feat: apply Lombok and Response DTO architecture`)에서 Entity의 public setter를 제거하고 상태 변경을 담당하는 `update()` 메서드를 추가했다.
+
+```java
+public void update(MealRequest mealRequest) {
+    this.mealName = mealRequest.getMealName();
+    this.calories = mealRequest.getCalories();
+    this.protein = mealRequest.getProtein();
+    this.carbohydrate = mealRequest.getCarbohydrate();
+    this.fat = mealRequest.getFat();
+}
+```
+
+Entity가 자신의 상태 변경을 담당하도록 변경한 방향 자체는 적절했다.
+
+하지만 Service에서 기존 setter 호출을 제거하면서 새로 만든 `meal.update()` 호출이 누락되었다.
+
+그 결과 수정 로직은 다음과 같은 형태가 되었다.
+
+```java
+public MealResponse updateMeal(Long id, MealRequest mealRequest) {
+    Meal meal = mealRepository.findById(id)
+            .orElseThrow(() -> new MealNotFoundException(id));
+
+    Meal updatedMeal = mealRepository.save(meal);
+
+    return MealResponse.from(updatedMeal);
+}
+```
+
+이 시점부터 PUT 요청의 데이터가 실제 Entity에 반영되지 않는 문제가 발생했다.
+
+---
+
+## 원인 분석
+
+문제의 핵심은 다음 코드였다.
+
+```java
+Meal updatedMeal = mealRepository.save(meal);
+```
+
+`save()`를 호출하면 전달받은 요청 데이터가 자동으로 Entity에 반영된다고 생각할 수 있지만, `save()`는 요청 DTO의 값을 Entity에 복사해주는 메서드가 아니다.
+
+조회한 `meal` 객체의 상태를 실제로 변경하는 코드가 먼저 필요하다.
+
+문제가 발생한 코드에서는 다음 과정만 수행되고 있었다.
+
+```text
+PUT 요청
+    ↓
+MealRequest
+    ↓
+findById(id)
+    ↓
+기존 Meal 조회
+    ↓
+Entity 상태 변경 없음
+    ↓
+save(meal)
+    ↓
+기존 데이터 그대로 저장
+```
+
+즉 Repository에서 가져온 기존 Meal 객체를 아무런 변경 없이 다시 저장하고 있었다.
+
+### 리팩터링 과정에서 발생한 회귀
+
+문제가 발생하기 전에는 setter가 Entity 상태를 변경하는 역할을 담당했다.
+
+```java
+meal.setMealName(mealRequest.getMealName());
+meal.setCalories(mealRequest.getCalories());
+meal.setProtein(mealRequest.getProtein());
+meal.setCarbohydrate(mealRequest.getCarbohydrate());
+meal.setFat(mealRequest.getFat());
+```
+
+리팩터링하면서 setter를 제거하고 이를 대체하기 위한 `Meal.update()`를 만들었지만, Service에서 `update()`를 호출하지 않았다.
+
+즉 문제의 직접적인 원인은 다음과 같다.
+
+> Entity setter를 제거하는 리팩터링 과정에서 기존 상태 변경 코드가 제거되었지만, 이를 대체하는 `Meal.update()` 호출이 Service에 반영되지 않았다.
+
+---
+
+## 해결
+
+커밋 `703597f` (`fix: Resolving data modification logic error and writing test codes`)에서 수정 로직을 변경했다.
+
+Service의 수정 작업을 하나의 트랜잭션으로 처리하고, 조회한 Entity의 상태를 `update()` 메서드로 변경하도록 수정했다.
+
+```java
+@Transactional
+public MealResponse updateMeal(Long id, MealRequest request) {
+    Meal meal = mealRepository.findById(id)
+            .orElseThrow(() -> new MealNotFoundException(id));
+
+    meal.update(
+            request.getMealName(),
+            request.getCalories(),
+            request.getProtein(),
+            request.getCarbohydrate(),
+            request.getFat()
+    );
+
+    return MealResponse.from(meal);
+}
+```
+
+Entity는 자신의 상태 변경을 직접 담당하도록 했다.
+
+```java
+public void update(
+        String mealName,
+        Integer calories,
+        Integer protein,
+        Integer carbohydrate,
+        Integer fat
+) {
+    this.mealName = mealName;
+    this.calories = calories;
+    this.protein = protein;
+    this.carbohydrate = carbohydrate;
+    this.fat = fat;
+}
+```
+
+이를 통해 Service는 Meal 내부 필드를 직접 수정하지 않고 Entity에게 상태 변경을 요청하는 구조가 되었다.
+
+---
+
+## 왜 `save()`를 다시 호출하지 않았는가?
+
+수정된 Service에는 다음 코드가 없다.
+
+```java
+mealRepository.save(meal);
+```
+
+그럼에도 DB의 데이터가 수정되는 이유는 JPA의 **Dirty Checking(변경 감지)** 때문이다.
+
+`@Transactional` 범위 안에서 `findById()`로 조회된 Entity는 영속성 컨텍스트가 관리하는 Managed 상태가 된다.
+
+```text
+@Transactional 시작
+        ↓
+mealRepository.findById()
+        ↓
+Meal Entity 조회
+        ↓
+영속 상태(Managed)
+        ↓
+meal.update(...)
+        ↓
+Entity 상태 변경
+        ↓
+트랜잭션 종료
+        ↓
+JPA Dirty Checking
+        ↓
+UPDATE SQL 실행
+```
+
+JPA는 트랜잭션이 종료되는 시점에 처음 조회했을 때의 Entity 상태와 현재 상태를 비교한다.
+
+값이 변경되어 있다면 변경 사항을 감지하고 UPDATE SQL을 실행한다.
+
+따라서 이미 영속 상태인 Entity를 수정하는 경우 별도의 다음 호출이 필요하지 않다.
+
+```java
+mealRepository.save(meal);
+```
+
+---
+
+## 테스트 추가
+
+같은 문제가 다시 발생하지 않도록 수정 로직에 대한 테스트도 추가했다.
+
+```java
+@Test
+@DisplayName("기존 식단을 수정한다")
+void updateMeal() {
+    // given
+    Long id = 1L;
+
+    MealRequest updateRequest = new MealRequest();
+    updateRequest.setMealName("연어 샐러드");
+    updateRequest.setCalories(450);
+    updateRequest.setProtein(35);
+    updateRequest.setCarbohydrate(20);
+    updateRequest.setFat(25);
+
+    when(mealRepository.findById(id))
+            .thenReturn(Optional.of(meal));
+
+    // when
+    MealResponse response =
+            mealService.updateMeal(id, updateRequest);
+
+    // then
+    assertEquals("연어 샐러드", response.getMealName());
+    assertEquals(450, response.getCalories());
+    assertEquals(35, response.getProtein());
+    assertEquals(20, response.getCarbohydrate());
+    assertEquals(25, response.getFat());
+
+    verify(mealRepository).findById(id);
+
+    // Dirty Checking을 사용하므로 save()는 호출되지 않는다.
+    verify(mealRepository, never())
+            .save(any(Meal.class));
+}
+```
+
+테스트에서는 두 가지를 검증한다.
+
+첫 번째는 요청한 값으로 Entity 상태가 실제 변경되었는지 확인하는 것이다.
+
+```java
+assertEquals("연어 샐러드", response.getMealName());
+assertEquals(450, response.getCalories());
+```
+
+두 번째는 수정 과정에서 불필요한 `save()`를 호출하지 않는지 확인하는 것이다.
+
+```java
+verify(mealRepository, never())
+        .save(any(Meal.class));
+```
+
+이를 통해 현재 수정 로직이 `@Transactional`과 JPA Dirty Checking을 사용하는 구조라는 것도 테스트로 명확하게 표현했다.
+
+---
+
+## 배운 점
+
+### 1. `save()`는 Entity의 값을 변경해주는 메서드가 아니다
+
+다음 코드만 호출한다고 요청 DTO의 값이 Entity에 자동으로 반영되는 것은 아니다.
+
+```java
+mealRepository.save(meal);
+```
+
+저장하기 전에 Entity의 상태가 실제로 변경되어 있어야 한다.
+
+### 2. JPA의 Dirty Checking을 활용할 수 있다
+
+트랜잭션 안에서 조회한 영속 Entity의 상태를 변경하면 JPA가 변경 사항을 감지한다.
+
+따라서 수정 로직에서 항상 `save()`를 호출해야 하는 것은 아니다.
+
+### 3. Entity의 상태 변경 책임을 명확하게 할 수 있다
+
+외부에서 setter를 여러 번 호출하는 것보다 Entity에 의미 있는 상태 변경 메서드를 두는 방식이 변경 지점을 명확하게 만든다.
+
+```java
+meal.update(...);
+```
+
+### 4. 리팩터링에서는 기존 동작 보존 여부를 확인해야 한다
+
+이번 문제는 코드 구조를 개선하는 과정에서 기존 수정 로직이 사라지면서 발생한 회귀(regression)였다.
+
+코드가 컴파일되고 애플리케이션이 실행된다는 것만으로 기존 기능이 보존됐다고 볼 수 없다.
+
+### 5. 테스트가 있었다면 더 빠르게 발견할 수 있었다
+
+리팩터링 당시 수정 로직을 검증하는 테스트가 있었다면 다음과 같은 assertion이 바로 실패했을 것이다.
+
+```java
+assertEquals("연어 샐러드", response.getMealName());
+```
+
+따라서 리팩터링 전후에는 기존 기능의 동작을 보장하는 테스트가 중요하다는 것을 확인했다.
+
+---
+
+## 관련 커밋
+
+| Commit    | 내용                                                                       |
+| --------- | ------------------------------------------------------------------------ |
+| `5e13523` | 최초 Meal CRUD 구현. setter를 이용한 PUT 수정                                      |
+| `703bd7b` | Lombok / Response DTO 리팩터링. setter 제거 과정에서 Service의 상태 변경 로직 누락          |
+| `703597f` | PUT 수정 로직 복구. `@Transactional`, Entity 상태 변경, Dirty Checking 적용 및 테스트 추가 |
+
+### 요약
+
+> Entity의 setter를 제거하는 리팩터링 과정에서 상태 변경 코드가 누락되어 PUT 요청 시 기존 Entity를 아무 변경 없이 다시 저장하는 문제가 발생했다. Git commit diff를 통해 정상 동작하던 코드와 리팩터링 이후 코드를 비교하여 원인을 찾았다. 이후 `@Transactional` 범위에서 Entity의 상태 변경 메서드를 호출하고 JPA Dirty Checking을 활용하도록 수정했으며, 수정 결과와 `save()` 미호출을 검증하는 테스트를 추가하여 동일한 회귀가 발생하지 않도록 했다.

@@ -260,4 +260,32 @@ class MealRepositoryTest {
         assertEquals(20, updatedMeal.getCarbohydrate());
         assertEquals(25, updatedMeal.getFat());
     }
+
+    @Test
+    @DisplayName("mealName이 null이면 DB에 저장할 수 없다")
+    void save_fail_whenMealNameIsNull() {
+
+        // given
+        Meal meal = new Meal(
+                null,
+                350,
+                40,
+                30,
+                10
+        );
+
+        // when & then
+        assertThrows(
+                Exception.class,
+                () -> {
+                    mealRepository.save(meal);
+
+                    /*
+                     * JPA는 INSERT SQL 실행을 지연할 수 있으므로
+                     * DB 제약조건 위반을 실제로 발생시키기 위해 flush한다.
+                     */
+                    entityManager.flush();
+                }
+        );
+    }
 }

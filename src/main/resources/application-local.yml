@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    # 로컬 MySQL의 diet 데이터베이스
+    url: jdbc:mysql://localhost:3306/diet
+
+    # 우선 연결 확인은 root 계정으로 해도 된다.
+    # 연결이 끝나면 diet-api 전용 계정을 따로 만드는 걸 추천.
+    username: root
+
+    # 실제 비밀번호를 yml에 직접 적지 않고
+    # 환경변수 DB_PASSWORD에서 가져온다.
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      # Entity를 기준으로 DB 스키마를 갱신한다.
+      # 학습/로컬 개발에서는 편리하다.
+      ddl-auto: update
+
+    # Hibernate가 실행하는 SQL 확인
+    show-sql: true
+
+    properties:
+      hibernate:
+        # SQL을 보기 좋게 출력
+        format_sql: true
+
+logging:
+  level:
+    # ? 자리에 들어가는 실제 파라미터 값 확인
+    org.hibernate.orm.jdbc.bind: TRACE

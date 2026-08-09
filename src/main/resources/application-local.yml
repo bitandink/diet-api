@@ -5,7 +5,7 @@ spring:
 
     # 우선 연결 확인은 root 계정으로 해도 된다.
     # 연결이 끝나면 diet-api 전용 계정을 따로 만드는 걸 추천.
-    username: root
+    username: ${DB_USERNAME}
 
     # 실제 비밀번호를 yml에 직접 적지 않고
     # 환경변수 DB_PASSWORD에서 가져온다.

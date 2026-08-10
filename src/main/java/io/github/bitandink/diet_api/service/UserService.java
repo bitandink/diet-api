@@ -5,6 +5,7 @@ package io.github.bitandink.diet_api.service;
 import io.github.bitandink.diet_api.dto.SignUpRequest;
 import io.github.bitandink.diet_api.dto.SignUpResponse;
 import io.github.bitandink.diet_api.entity.User;
+import io.github.bitandink.diet_api.exception.DuplicateEmailException;
 import io.github.bitandink.diet_api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,7 +24,7 @@ public class UserService {
 
         // 1. 이메일 중복 확인
         if (userRepository.existsByEmail(request.email())) {
-            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+            throw new DuplicateEmailException(request.email());
         }
 
         // 2. 평문 비밀번호를 BCrypt로 해시

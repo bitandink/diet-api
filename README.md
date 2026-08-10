@@ -5,7 +5,41 @@ Spring Boot 기반 식단 관리 REST API입니다.
 식단의 영양 정보를 등록·조회·수정·삭제하는 CRUD 기능을 시작으로  
 Validation, 예외 처리, 테스트, JPA/Transaction, MySQL 연동, 회원가입 및 인증/인가 기능을 단계적으로 학습하고 적용하는 프로젝트입니다.
 
-현재 Meal CRUD와 MySQL 연동을 완료했으며, 이메일 기반 회원가입과 Spring Security 인증 기능을 구현하고 있습니다.
+현재 Meal CRUD, MySQL 연동, 이메일 기반 회원가입과 Spring Security 기본 설정까지 완료했으며,  
+다음 단계로 로그인 및 JWT 기반 인증/인가 기능을 구현할 예정입니다.
+
+---
+
+## 🎯 Project Goal
+
+이 프로젝트의 핵심 목표는 UI를 만드는 것이 아니라, 하나의 HTTP 요청이 백엔드 내부에서 어떻게 처리되는지 직접 구현하면서 전체 흐름을 이해하는 것입니다.
+
+```text
+HTTP Request
+    │
+    ▼
+Spring Security
+    │
+    ▼
+Controller
+    │
+    ▼
+Validation
+    │
+    ▼
+Service
+    │
+    ▼
+Repository
+    │
+    ▼
+Database
+    │
+    ▼
+HTTP Response
+```
+
+기능 구현뿐만 아니라 각 계층의 책임, 예외 처리, 데이터 검증 및 테스트까지 함께 작성하면서 프론트엔드에서 사용하는 REST API가 서버 내부에서 어떻게 동작하는지 학습하고 있습니다.
 
 ---
 
@@ -27,7 +61,7 @@ Validation, 예외 처리, 테스트, JPA/Transaction, MySQL 연동, 회원가�
 - MySQL 8
   - Local 개발 환경
 - H2 Database
-  - Test 환경
+  - JPA / Repository Test 환경
 
 ### Security
 
@@ -54,6 +88,9 @@ Validation, 예외 처리, 테스트, JPA/Transaction, MySQL 연동, 회원가�
 Client
   │
   ▼
+Spring Security
+  │
+  ▼
 Controller
   │
   ▼
@@ -74,12 +111,14 @@ Database
 - Request Validation
 - Service 호출
 - HTTP Status 결정
+- 공통 Response 반환
 
 ### Service
 
 - 비즈니스 로직 처리
 - Transaction 관리
 - Entity / DTO 변환
+- 이메일 중복 검사
 - 비밀번호 해시 처리
 
 ### Repository
@@ -91,6 +130,13 @@ Database
 
 - Database Table Mapping
 - 도메인 상태 관리
+
+### Global Exception Handler
+
+- Validation 예외 처리
+- 리소스 조회 실패 처리
+- 비즈니스 예외 처리
+- 공통 ErrorResponse 생성
 
 ---
 
@@ -110,7 +156,7 @@ Database
 
 | Method | Endpoint | Description | Status |
 | --- | --- | --- | --- |
-| POST | `/api/auth/signup` | 회원가입 | 구현 중 |
+| POST | `/api/auth/signup` | 회원가입 | 완료 |
 | POST | `/api/auth/login` | 로그인 | 예정 |
 
 ---
@@ -150,16 +196,23 @@ User
 
 - `id`
   - Database Primary Key
+
 - `email`
   - 로그인 ID
   - 중복 불가
+  - 최대 100자
+
 - `password`
   - 평문 저장 금지
   - BCrypt 해시값 저장
+
 - `name`
   - 사용자 이름
+  - 최대 50자
+
 - `phone`
   - 선택 입력 연락처
+  - 최대 50자
 
 ---
 
@@ -171,6 +224,9 @@ User
 POST /api/auth/signup
         │
         ▼
+Spring Security
+        │
+        ▼
 SignUpRequest
         │
         ▼
@@ -180,8 +236,11 @@ Bean Validation
 UserService
         │
         ├── 이메일 중복 검사
+        │
         ├── BCrypt Password Encoding
+        │
         ├── User Entity 생성
+        │
         └── UserRepository.save()
         │
         ▼
@@ -245,6 +304,44 @@ phone
 
 ---
 
+## 📦 DTO
+
+HTTP Request / Response와 JPA Entity를 분리합니다.
+
+```text
+HTTP Request
+      │
+      ▼
+Request DTO
+      │
+      ▼
+Service
+      │
+      ▼
+Entity
+      │
+      ▼
+Database
+```
+
+Entity를 HTTP Response로 직접 반환하지 않고 Response DTO로 변환합니다.
+
+회원가입 DTO부터 Java `record`를 사용합니다.
+
+```java
+public record SignUpRequest(
+        String email,
+        String password,
+        String name,
+        String phone
+) {
+}
+```
+
+`record`는 데이터 전달이 주목적인 DTO에서 반복적인 생성자와 Getter 코드를 줄이고, 불필요한 상태 변경 가능성을 제한하기 위해 사용합니다.
+
+---
+
 ## 🔐 Password Security
 
 사용자의 비밀번호는 평문으로 저장하지 않습니다.
@@ -287,7 +384,7 @@ Password Hash
 Database
 ```
 
-로그인 구현 시에는 저장된 Hash를 복호화하지 않고 `matches()`를 사용하여 검증할 예정입니다.
+로그인 구현 시에는 저장된 Hash를 복호화하지 않고 `matches()`를 사용하여 입력한 비밀번호와 저장된 해시값을 비교할 예정입니다.
 
 ```java
 passwordEncoder.matches(
@@ -298,41 +395,36 @@ passwordEncoder.matches(
 
 ---
 
-## 📦 DTO
+## 🛡 Spring Security
 
-HTTP Request / Response와 JPA Entity를 분리합니다.
+Spring Security의 `SecurityFilterChain`을 이용하여 HTTP 요청별 접근 정책을 설정합니다.
 
-```text
-HTTP Request
-      │
-      ▼
-Request DTO
-      │
-      ▼
-Service
-      │
-      ▼
-Entity
-      │
-      ▼
-Database
-```
-
-Entity를 HTTP Response로 직접 반환하지 않고 Response DTO로 변환합니다.
-
-회원가입 DTO부터 Java `record`도 사용합니다.
+회원가입 API는 인증되지 않은 사용자도 접근할 수 있도록 허용합니다.
 
 ```java
-public record SignUpRequest(
-        String email,
-        String password,
-        String name,
-        String phone
-) {
-}
+http
+        .csrf(csrf -> csrf.disable())
+        .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/signup")
+                .permitAll()
+                .anyRequest()
+                .authenticated()
+        );
 ```
 
-`record`는 데이터 전달이 주목적인 DTO에서 반복적인 생성자, Getter 등의 코드를 줄이고 변경 가능성을 제한하기 위해 사용합니다.
+현재 단계에서는:
+
+```text
+POST /api/auth/signup
+→ permitAll()
+
+그 외 요청
+→ authenticated()
+```
+
+정책을 적용하고 있습니다.
+
+향후 로그인 API를 추가하면 `/api/auth/login` 역시 인증 없이 접근할 수 있도록 허용하고, JWT를 이용하여 나머지 요청의 인증 여부를 판단하도록 확장할 예정입니다.
 
 ---
 
@@ -364,13 +456,14 @@ Validation 실패 시 필드별 오류 정보를 반환합니다.
 {
   "status": 400,
   "message": "입력값이 올바르지 않습니다.",
-  "path": "/api/meals",
+  "path": "/api/auth/signup",
   "errors": {
-    "mealName": "식단 이름은 필수 입력 항목입니다.",
-    "calories": "칼로리는 0 이상이어야 합니다."
+    "email": "올바른 이메일 형식이 아닙니다."
   }
 }
 ```
+
+Validation 실패 요청은 Service 계층까지 전달되지 않습니다.
 
 ---
 
@@ -380,29 +473,62 @@ Validation 실패 시 필드별 오류 정보를 반환합니다.
 
 ### MealNotFoundException
 
-존재하지 않는 식단을 조회, 수정, 삭제할 경우 발생합니다.
+존재하지 않는 식단을 조회, 수정 또는 삭제할 경우 발생합니다.
 
 ```text
 HTTP 404 Not Found
 ```
 
+처리 흐름:
+
+```text
+MealService
+    │
+    ▼
+MealNotFoundException
+    │
+    ▼
+GlobalExceptionHandler
+    │
+    ▼
+404 Not Found
+```
+
 ### MethodArgumentNotValidException
 
-Request Validation이 실패할 경우 처리합니다.
+Request DTO의 Bean Validation이 실패할 경우 처리합니다.
 
 ```text
 HTTP 400 Bad Request
 ```
 
-### Duplicate Email
+처리 흐름:
 
-회원가입 시 이메일 중복 여부를 확인합니다.
-
-```java
-boolean existsByEmail(String email);
+```text
+Request
+    │
+    ▼
+@Valid
+    │
+    ▼
+MethodArgumentNotValidException
+    │
+    ▼
+GlobalExceptionHandler
+    │
+    ▼
+400 Bad Request
 ```
 
-현재 중복 이메일에 대한 전용 예외는 구현 예정입니다.
+### DuplicateEmailException
+
+이미 가입된 이메일로 회원가입을 요청할 경우 발생합니다.
+
+```text
+HTTP 409 Conflict
+```
+
+처리 흐름:
 
 ```text
 UserService
@@ -414,7 +540,23 @@ DuplicateEmailException
 GlobalExceptionHandler
     │
     ▼
-HTTP Error Response
+409 Conflict
+```
+
+애플리케이션에서는 `existsByEmail()`로 이메일 중복 여부를 사전에 확인합니다.
+
+```java
+boolean existsByEmail(String email);
+```
+
+DB에서는 `UNIQUE` 제약조건을 유지하여 중복 데이터 저장을 최종적으로 방지합니다.
+
+```text
+existsByEmail()
+→ 사용자에게 의미 있는 비즈니스 오류 제공
+
+UNIQUE Constraint
+→ DB의 최종 데이터 정합성 보장
 ```
 
 ---
@@ -454,7 +596,22 @@ diet_app
 
 ### Test
 
-Test 환경에서는 외부 MySQL에 의존하지 않도록 H2 In-Memory Database를 사용합니다.
+테스트 목적에 따라 실제 DB 사용 여부를 구분합니다.
+
+```text
+Service Unit Test
+→ Mockito
+→ DB 사용 안 함
+
+Controller Test
+→ MockMvc + Mock Service
+→ DB 사용 안 함
+
+JPA / Repository Test
+→ H2 Database
+```
+
+외부 MySQL에 의존하지 않도록 JPA 테스트에서는 H2 In-Memory Database를 사용합니다.
 
 ---
 
@@ -493,7 +650,7 @@ spring:
 
 ### `application-test.yml`
 
-자동 테스트 환경에서 사용할 H2 Database 설정을 관리합니다.
+JPA / Repository 테스트 환경에서 사용할 H2 Database 설정을 관리합니다.
 
 ### Environment Variables
 
@@ -513,13 +670,13 @@ DB 비밀번호를 Git으로 관리되는 YAML 파일에 직접 저장하지 않
 
 Service 계층에서 Transaction 경계를 관리합니다.
 
-조회:
+### 조회
 
 ```java
 @Transactional(readOnly = true)
 ```
 
-등록 / 수정 / 삭제:
+### 등록 / 수정 / 삭제
 
 ```java
 @Transactional
@@ -527,7 +684,7 @@ Service 계층에서 Transaction 경계를 관리합니다.
 
 Meal 수정에서는 JPA Dirty Checking을 활용합니다.
 
-회원가입 역시 Service의 Transaction 안에서 User를 저장합니다.
+회원가입 역시 Service의 Transaction 범위 안에서 User를 저장합니다.
 
 ---
 
@@ -535,21 +692,73 @@ Meal 수정에서는 JPA Dirty Checking을 활용합니다.
 
 계층별 책임에 따라 테스트를 분리합니다.
 
+---
+
 ### Controller Test
 
-`MockMvc`를 활용하여 다음을 검증합니다.
+`@WebMvcTest`와 `MockMvc`를 활용하여 웹 계층을 테스트합니다.
+
+주요 검증 대상:
 
 - HTTP Status
 - Response JSON
 - Request Validation
 - Exception Handling
 - Controller → Service 호출
+- Validation 실패 시 Service 미호출
+
+회원가입 API에서는 다음 케이스를 검증합니다.
+
+```text
+회원가입 성공
+→ 201 Created
+
+중복 이메일
+→ 409 Conflict
+
+이메일
+→ 필수값
+→ 이메일 형식
+→ 최대 길이
+
+비밀번호
+→ 필수값
+→ 최소 길이
+→ 최대 길이
+
+이름
+→ 필수값
+→ 최대 길이
+
+전화번호
+→ 최대 길이
+```
+
+Validation 실패 시:
+
+```java
+verifyNoInteractions(userService);
+```
+
+를 사용하여 Service까지 요청이 전달되지 않는지도 확인합니다.
+
+반복되는 MockMvc 요청 및 Validation 검증 로직은 Helper 메서드로 분리했습니다.
+
+```text
+performSignUp()
+→ 회원가입 HTTP 요청 공통 처리
+
+expectValidationError()
+→ Validation 실패 응답 공통 검증
+```
+
+---
 
 ### Service Test
 
-JUnit과 Mockito를 활용하여 비즈니스 로직을 단위 테스트합니다.
+JUnit 5와 Mockito를 활용하여 비즈니스 로직을 단위 테스트합니다.
 
-현재 Meal Service를 기준으로 다음을 검증합니다.
+#### Meal Service
 
 - 전체 조회
 - 단건 조회
@@ -557,10 +766,33 @@ JUnit과 Mockito를 활용하여 비즈니스 로직을 단위 테스트합니�
 - 수정
 - 삭제
 - 존재하지 않는 Meal 예외 처리
-- Repository 호출
+- Repository 호출 검증
 - Dirty Checking을 이용한 수정 흐름
 
-회원가입 Service Test는 추가 예정입니다.
+#### User Service
+
+- 정상 회원가입
+- 이메일 중복 확인
+- `DuplicateEmailException`
+- `PasswordEncoder.encode()` 호출
+- 암호화된 비밀번호 저장
+- 중복 이메일일 경우 저장 중단
+
+`ArgumentCaptor`를 이용하여 Repository에 실제 전달된 `User` 객체를 확인합니다.
+
+```java
+ArgumentCaptor<User> userCaptor =
+        ArgumentCaptor.forClass(User.class);
+
+verify(userRepository)
+        .save(userCaptor.capture());
+
+User savedUser = userCaptor.getValue();
+```
+
+이를 통해 단순히 `save()` 호출 여부뿐만 아니라 저장 대상의 비밀번호가 실제로 인코딩된 값인지 검증합니다.
+
+---
 
 ### JPA / Repository Test
 
@@ -572,6 +804,44 @@ H2 Database를 활용하여 실제 JPA 동작을 검증합니다.
 - Persistence Context
 - Dirty Checking
 - Database Constraint
+
+---
+
+## 🧪 Test Strategy
+
+테스트는 계층의 책임에 따라 분리합니다.
+
+```text
+Controller Test
+→ HTTP 계약
+→ JSON
+→ Validation
+→ Exception Response
+
+Service Test
+→ 비즈니스 규칙
+→ Repository 호출
+→ PasswordEncoder 호출
+
+JPA Test
+→ 실제 Entity Mapping
+→ Persistence Context
+→ Database Constraint
+```
+
+하나의 테스트에서는 가능하면 하나의 조건만 실패하도록 테스트 데이터를 구성합니다.
+
+예를 들어 이메일 최대 길이 Validation을 테스트할 경우:
+
+```text
+@Email
+→ 통과
+
+@Size
+→ 실패
+```
+
+하도록 데이터를 구성하여 어떤 Validation 조건 때문에 테스트가 실패했는지 명확하게 유지합니다.
 
 ---
 
@@ -600,6 +870,8 @@ H2 Database를 활용하여 실제 JPA 동작을 검증합니다.
 - [x] 공통 API Response
 - [x] Global Exception Handling
 - [x] Validation Error Response
+- [x] DuplicateEmailException
+- [x] 이메일 중복 `409 Conflict` 처리
 
 #### JPA / Database
 
@@ -614,45 +886,74 @@ H2 Database를 활용하여 실제 JPA 동작을 검증합니다.
 - [x] MySQL 전용 애플리케이션 계정
 - [x] DB 계정 환경변수 관리
 
-#### Test
-
-- [x] Controller Test
-- [x] Service Unit Test
-- [x] JPA / Repository Test
-
 #### User / Sign Up
 
 - [x] User Entity
 - [x] 이메일 기반 로그인 ID 설계
 - [x] SignUpRequest
 - [x] Java record DTO 적용
+- [x] SignUpResponse
 - [x] UserRepository
 - [x] `existsByEmail()` 구현
+- [x] 회원가입 Service
+- [x] 회원가입 Controller
+- [x] 회원가입 API 실제 요청 검증
+- [x] 회원가입 Validation
+- [x] BCrypt Password Encoding
+- [x] MySQL User 저장 확인
+- [x] BCrypt Password 저장 확인
+
+#### Spring Security
+
 - [x] Spring Security 의존성 추가
 - [x] PasswordEncoder Bean
-- [x] BCrypt Password Encoding
-- [x] UserService 회원가입 기본 로직
-- [x] SignUpResponse
-- [x] 회원가입 Controller 기본 구현
+- [x] BCryptPasswordEncoder 적용
+- [x] SecurityFilterChain 설정
+- [x] CSRF 비활성화
+- [x] `/api/auth/signup` 비인증 접근 허용
+- [x] 그 외 요청 인증 필요 설정
 
-### In Progress
+#### Test
 
-- [ ] 회원가입 API 실제 요청 검증
-- [ ] SecurityFilterChain 설정
-- [ ] `/api/auth/signup` 비인증 접근 허용
-- [ ] 중복 이메일 전용 예외
-- [ ] 회원가입 Service Test
-- [ ] 회원가입 Controller Test
+- [x] Meal Controller Test
+- [x] Meal Service Unit Test
+- [x] JPA / Repository Test
+- [x] Signup Service Test
+- [x] Signup Controller Test
+- [x] Signup Validation Test
+- [x] Duplicate Email Test
+- [x] Password Encoding Test
 
-### Planned
+---
 
-- [ ] 로그인 API
+## ⏭ Next
+
+### Login
+
+- [ ] LoginRequest
+- [ ] LoginResponse
+- [ ] 이메일 기반 User 조회
+- [ ] 존재하지 않는 User 처리
+- [ ] `PasswordEncoder.matches()` 비밀번호 검증
+- [ ] 로그인 실패 예외 처리
+- [ ] Login Service
+- [ ] Login Controller
+- [ ] `/api/auth/login` 비인증 접근 허용
+- [ ] Login Service Test
+- [ ] Login Controller Test
+
+### JWT / Authorization
+
 - [ ] JWT Access Token 발급
 - [ ] JWT 검증
 - [ ] JWT Authentication Filter
-- [ ] 인증 / 인가
+- [ ] 인증 사용자 식별
 - [ ] User - Meal 관계
 - [ ] 로그인 사용자 기준 Meal 접근 제한
+- [ ] Authorization
+
+### Deployment
+
 - [ ] Docker
 - [ ] AWS 배포
 
@@ -688,10 +989,10 @@ User
 Sign Up
     │
     ▼
-Spring Security  ← 현재
+Spring Security
     │
     ▼
-Login
+Login  ← 다음
     │
     ▼
 JWT
@@ -722,10 +1023,15 @@ AWS
 - Bean Validation
 - Exception Handling
 - Controller / Service / Repository Test
+- Mockito
+- ArgumentCaptor
+- MockMvc
 - Spring Profile
 - YAML
 - MySQL
 - Java record
 - Spring Security
+- SecurityFilterChain
 - BCrypt
 - 회원가입
+- 테스트 계층 분리
